@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/GustavoZeglan/SaveHash/core/db"
+	"github.com/GustavoZeglan/SaveHash/db"
 	"github.com/GustavoZeglan/SaveHash/web/router"
 	"github.com/joho/godotenv"
 	"log"

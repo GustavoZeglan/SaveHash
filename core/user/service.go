@@ -24,30 +24,9 @@ func NewService(DB *sql.DB) *UserService {
 	return &UserService{DB}
 }
 
-func (s *UserService) GetAllUsers() ([]User, error) {
-	rows, err := s.DB.Query("SELECT user_name, email, password FROM users")
-	if err != nil {
-		return []User{}, nil
-	}
+func (us *UserService) Login(email, password string) (bool, error) {
 
-	var users []User
-
-	for rows.Next() {
-		var u User
-		err := rows.Scan(&u.Username, &u.Email, &u.Password)
-		if err != nil {
-			fmt.Print(err)
-			return []User{}, err
-		}
-		users = append(users, u)
-	}
-
-	return users, nil
-}
-
-func (s *UserService) Login(email, password string) (bool, error) {
-
-	query, err := s.DB.Prepare("SELECT password FROM users WHERE email = $1")
+	query, err := us.DB.Prepare("SELECT password FROM users WHERE email = $1")
 	if err != nil {
 		return false, err
 	}
@@ -68,16 +47,16 @@ func (s *UserService) Login(email, password string) (bool, error) {
 	return true, nil
 }
 
-func (s *UserService) SignUp(user User) error {
+func (us *UserService) SignUp(user User) (int, error) {
 
-	storageUser, err := s.GetUserByEmail(user.Email)
+	storageUser, err := us.GetUserByEmail(user.Email)
 	if storageUser.Email == user.Email {
-		return errors.New("User already exists")
+		return 0, errors.New("User already exists")
 	}
 
 	sb, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	u := &User{
@@ -86,34 +65,34 @@ func (s *UserService) SignUp(user User) error {
 		Password: string(sb),
 	}
 
-	query, err := s.DB.Prepare("INSERT INTO users(user_name, email, password) VALUES($1, $2, $3) RETURNING id;")
+	query, err := us.DB.Prepare("INSERT INTO users(user_name, email, password) VALUES($1, $2, $3) RETURNING id;")
 	if err != nil {
 		fmt.Println(err)
-		return err
+		return 0, err
 	}
 
 	defer query.Close()
 
-	var id uint
+	var id int
 	err = query.QueryRow(u.Username, u.Email, u.Password).Scan(&id)
 	if err != nil {
 		fmt.Println(err)
-		return err
+		return 0, err
 	}
 
-	return nil
+	return id, nil
 }
 
-func (s *UserService) GetUserByEmail(email string) (User, error) {
+func (us *UserService) GetUserByEmail(email string) (User, error) {
 	var u User
-	query, err := s.DB.Prepare("SELECT user_name, email FROM users WHERE email = $1")
+	query, err := us.DB.Prepare("SELECT id, user_name, email FROM users WHERE email = $1")
 	if err != nil {
 		return User{}, err
 	}
 
 	defer query.Close()
 
-	err = query.QueryRow(email).Scan(&u.Username, &u.Email)
+	err = query.QueryRow(email).Scan(&u.ID, &u.Username, &u.Email)
 	if err != nil {
 		fmt.Println(err)
 		return User{}, err

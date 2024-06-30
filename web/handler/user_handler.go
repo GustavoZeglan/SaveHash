@@ -1,10 +1,11 @@
 package handler
 
 import (
-	"encoding/json"
 	"github.com/GustavoZeglan/SaveHash/core/user"
+	"github.com/GustavoZeglan/SaveHash/web/model"
 	"github.com/GustavoZeglan/SaveHash/web/utils"
 	"net/http"
+	"strconv"
 )
 
 type UserHandler struct {
@@ -18,69 +19,36 @@ func NewUserHandler(service *user.UserService) *UserHandler {
 }
 
 func (uh *UserHandler) SignUp(w http.ResponseWriter, r *http.Request) {
-	var u user.User
+	u, _ := r.Context().Value("payload").(user.User)
 
-	err := json.NewDecoder(r.Body).Decode(&u)
-	if err != nil {
-		msg := utils.Message{Message: "An unexpected error was occurred", Status: http.StatusBadRequest}
-		utils.RespondWithJSON(w, http.StatusBadRequest, msg)
-		return
-	}
-
-	errors, err := utils.ErrorHandler(u)
-	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write(errors)
-		return
-	}
-
-	err = uh.service.SignUp(u)
+	id, err := uh.service.SignUp(u)
 	if err != nil {
 		msg := utils.Message{Message: "Probally that email address is already in use", Status: http.StatusBadRequest}
 		utils.RespondWithJSON(w, http.StatusBadRequest, msg)
 		return
 	}
 
-	msg := utils.Message{Message: "User created successfully", Status: http.StatusCreated, Data: u}
+	res := model.ResponseUser{
+		ID:       id,
+		Username: u.Username,
+		Email:    u.Email,
+	}
+
+	msg := utils.Message{Message: "User created successfully", Status: http.StatusCreated, Data: res}
 	utils.RespondWithJSON(w, http.StatusCreated, msg)
 }
 
-func (uh *UserHandler) GetUsers(w http.ResponseWriter, r *http.Request) {
-
-	users, err := uh.service.GetAllUsers()
-	if err != nil {
-		msg := utils.Message{Message: "Internal Server Error", Status: http.StatusInternalServerError}
-		utils.RespondWithJSON(w, http.StatusInternalServerError, msg)
-		return
-	}
-
-	response, _ := json.Marshal(users)
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	w.Write(response)
-}
-
 func (uh *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
-	var user user.User
+	u, _ := r.Context().Value("payload").(user.User)
 
-	err := json.NewDecoder(r.Body).Decode(&user)
+	storagedUser, err := uh.service.GetUserByEmail(u.Email)
 	if err != nil {
-		msg := utils.Message{Message: "An error occurred", Status: http.StatusBadRequest}
+		msg := utils.Message{Message: "Unregistered user", Status: http.StatusBadRequest}
 		utils.RespondWithJSON(w, http.StatusBadRequest, msg)
 		return
 	}
 
-	errors, err := utils.ErrorHandler(user)
-	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write(errors)
-		return
-	}
-
-	isMatch, err := uh.service.Login(user.Email, user.Password)
+	isMatch, err := uh.service.Login(u.Email, u.Password)
 	if err != nil {
 		msg := utils.Message{Message: "Invalid credentials", Status: http.StatusBadRequest}
 		utils.RespondWithJSON(w, http.StatusBadRequest, msg)
@@ -93,7 +61,7 @@ func (uh *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := utils.CreateToken(user.Username, user.Email)
+	token, err := utils.CreateToken(strconv.Itoa(storagedUser.ID), u.Email)
 	if err != nil {
 		msg := utils.Message{Message: "An unexpected error was occurred", Status: http.StatusInternalServerError}
 		utils.RespondWithJSON(w, http.StatusInternalServerError, msg)
