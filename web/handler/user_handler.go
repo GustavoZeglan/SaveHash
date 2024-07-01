@@ -5,6 +5,7 @@ import (
 	"github.com/GustavoZeglan/SaveHash/core/user"
 	"github.com/GustavoZeglan/SaveHash/web/utils"
 	"net/http"
+	"strconv"
 )
 
 type UserHandler struct {
@@ -18,82 +19,71 @@ func NewUserHandler(service *user.UserService) *UserHandler {
 }
 
 func (uh *UserHandler) SignUp(w http.ResponseWriter, r *http.Request) {
-	var u user.User
+	var req user.SignUpRequest
 
-	err := json.NewDecoder(r.Body).Decode(&u)
+	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		msg := utils.Message{Message: "An unexpected error was occurred", Status: http.StatusBadRequest}
 		utils.RespondWithJSON(w, http.StatusBadRequest, msg)
 		return
 	}
 
-	errors, err := utils.ErrorHandler(u)
+	u, err := user.NewUser(req.Username, req.Email, req.Password)
 	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write(errors)
+		msg := utils.Message{Message: "An unexpected error was occurred", Status: http.StatusBadRequest, Data: err.Error()}
+		utils.RespondWithJSON(w, http.StatusBadRequest, msg)
 		return
 	}
 
-	err = uh.service.SignUp(u)
-	if err != nil {
+	resUser, err := uh.service.SignUp(u.Username, u.Email, u.Password)
+
+	if err != nil && err.Error() == "email already registered" {
 		msg := utils.Message{Message: "Probally that email address is already in use", Status: http.StatusBadRequest}
 		utils.RespondWithJSON(w, http.StatusBadRequest, msg)
 		return
 	}
 
-	msg := utils.Message{Message: "User created successfully", Status: http.StatusCreated, Data: u}
-	utils.RespondWithJSON(w, http.StatusCreated, msg)
-}
-
-func (uh *UserHandler) GetUsers(w http.ResponseWriter, r *http.Request) {
-
-	users, err := uh.service.GetAllUsers()
 	if err != nil {
-		msg := utils.Message{Message: "Internal Server Error", Status: http.StatusInternalServerError}
-		utils.RespondWithJSON(w, http.StatusInternalServerError, msg)
-		return
-	}
-
-	response, _ := json.Marshal(users)
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	w.Write(response)
-}
-
-func (uh *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
-	var user user.User
-
-	err := json.NewDecoder(r.Body).Decode(&user)
-	if err != nil {
-		msg := utils.Message{Message: "An error occurred", Status: http.StatusBadRequest}
+		msg := utils.Message{Message: "Validation error", Status: http.StatusBadRequest}
 		utils.RespondWithJSON(w, http.StatusBadRequest, msg)
 		return
 	}
 
-	errors, err := utils.ErrorHandler(user)
+	utils.RespondWithJSON(w, http.StatusCreated, resUser)
+}
+
+func (uh *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
+	var req user.LoginRequest
+
+	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write(errors)
+		msg := utils.Message{Message: "An unexpected error was occurred", Status: http.StatusBadRequest}
+		utils.RespondWithJSON(w, http.StatusBadRequest, msg)
 		return
 	}
 
-	isMatch, err := uh.service.Login(user.Email, user.Password)
+	lr, err := user.NewLoginRequest(req.Email, req.Password)
 	if err != nil {
+		msg := utils.Message{Message: "Validation error", Status: http.StatusBadRequest, Data: err.Error()}
+		utils.RespondWithJSON(w, http.StatusBadRequest, msg)
+		return
+	}
+
+	storageUser, err := uh.service.GetUserByEmail(req.Email)
+	if err != nil {
+		msg := utils.Message{Message: "Unregistered user", Status: http.StatusBadRequest}
+		utils.RespondWithJSON(w, http.StatusBadRequest, msg)
+		return
+	}
+
+	authenticated, err := uh.service.Login(lr.Email, lr.Password)
+	if err != nil || !authenticated {
 		msg := utils.Message{Message: "Invalid credentials", Status: http.StatusBadRequest}
 		utils.RespondWithJSON(w, http.StatusBadRequest, msg)
 		return
 	}
 
-	if !isMatch {
-		msg := utils.Message{Message: "Invalid credentials", Status: http.StatusUnauthorized}
-		utils.RespondWithJSON(w, http.StatusUnauthorized, msg)
-		return
-	}
-
-	token, err := utils.CreateToken(user.Username, user.Email)
+	token, err := utils.CreateToken(strconv.Itoa(storageUser.ID), lr.Email)
 	if err != nil {
 		msg := utils.Message{Message: "An unexpected error was occurred", Status: http.StatusInternalServerError}
 		utils.RespondWithJSON(w, http.StatusInternalServerError, msg)
