@@ -3,7 +3,6 @@ package user
 import (
 	"database/sql"
 	"errors"
-	"fmt"
 	"golang.org/x/crypto/bcrypt"
 
 	_ "github.com/lib/pq"
@@ -33,7 +32,7 @@ func (us *UserService) Login(email, password string) (bool, error) {
 
 	defer query.Close()
 
-	hashedPassword := ""
+	var hashedPassword string
 
 	err = query.QueryRow(email).Scan(&hashedPassword)
 	if err != nil {
@@ -47,28 +46,18 @@ func (us *UserService) Login(email, password string) (bool, error) {
 	return true, nil
 }
 
-func (us *UserService) SignUp(user User) (int, error) {
+func (us *UserService) SignUp(username, email, password string) (*ResponseUser, error) {
 
-	storageUser, err := us.GetUserByEmail(user.Email)
-	if storageUser.Email == user.Email {
-		return 0, errors.New("User already exists")
+	storageUser, err := us.GetUserByEmail(email)
+	if storageUser.Email == email {
+		return nil, errors.New("email already registered")
 	}
 
-	sb, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
-	if err != nil {
-		return 0, err
-	}
-
-	u := &User{
-		Username: user.Username,
-		Email:    user.Email,
-		Password: string(sb),
-	}
+	u, _ := NewUser(username, email, password)
 
 	query, err := us.DB.Prepare("INSERT INTO users(user_name, email, password) VALUES($1, $2, $3) RETURNING id;")
 	if err != nil {
-		fmt.Println(err)
-		return 0, err
+		return nil, err
 	}
 
 	defer query.Close()
@@ -76,26 +65,26 @@ func (us *UserService) SignUp(user User) (int, error) {
 	var id int
 	err = query.QueryRow(u.Username, u.Email, u.Password).Scan(&id)
 	if err != nil {
-		fmt.Println(err)
-		return 0, err
+		return nil, err
 	}
 
-	return id, nil
+	ru := NewResponseUser(id, u.Username, u.Email)
+
+	return ru, nil
 }
 
-func (us *UserService) GetUserByEmail(email string) (User, error) {
-	var u User
+func (us *UserService) GetUserByEmail(email string) (ResponseUser, error) {
+	var u ResponseUser
 	query, err := us.DB.Prepare("SELECT id, user_name, email FROM users WHERE email = $1")
 	if err != nil {
-		return User{}, err
+		return ResponseUser{}, err
 	}
 
 	defer query.Close()
 
 	err = query.QueryRow(email).Scan(&u.ID, &u.Username, &u.Email)
 	if err != nil {
-		fmt.Println(err)
-		return User{}, err
+		return ResponseUser{}, err
 	}
 
 	return u, nil

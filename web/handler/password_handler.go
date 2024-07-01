@@ -19,7 +19,7 @@ func NewPasswordHandler(service password.PasswordService) *PasswordHandler {
 }
 
 func (ph *PasswordHandler) CreatePassword(w http.ResponseWriter, r *http.Request) {
-	passwordRequest, _ := r.Context().Value("payload").(model.PasswordRequest)
+	p, _ := r.Context().Value("payload").(model.PasswordRequest)
 
 	payload := r.Header.Get("user_id")
 	if payload == "" {
@@ -37,11 +37,7 @@ func (ph *PasswordHandler) CreatePassword(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	newPassword := password.Password{
-		Name:   passwordRequest.Name,
-		Hash:   passwordRequest.Hash,
-		UserID: userId,
-	}
+	newPassword := password.NewPassword(p.Name, p.Hash, userId)
 
 	id, err := ph.service.InsertPassword(newPassword)
 	if err != nil {

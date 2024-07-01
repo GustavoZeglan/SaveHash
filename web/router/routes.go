@@ -22,12 +22,15 @@ func initializeRoutes(r *chi.Mux, db *sql.DB) {
 	// Instance of Password Handler
 	passwordHandler := handler.NewPasswordHandler(passwordService)
 
-	r.Post("/signup", middleware.ValidateBody[user.User](userHandler.SignUp))
-	r.Post("/login", middleware.ValidateBody[user.User](userHandler.Login))
+	r.Group(func(r chi.Router) {
+		r.Post("/signup", userHandler.SignUp)
+		r.Post("/login", userHandler.Login)
+	})
 
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.Auth)
-		r.Post("/password", middleware.ValidateBody[password.Password](passwordHandler.CreatePassword))
+		r.Use(middleware.ValidateBody[password.Password])
+		r.Post("/password", passwordHandler.CreatePassword)
 		r.Get("/passwords", passwordHandler.GetPasswords)
 	})
 }

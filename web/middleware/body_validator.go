@@ -15,7 +15,7 @@ func init() {
 	validate = validator.New()
 }
 
-func ValidateBody[T any](next http.HandlerFunc) http.HandlerFunc {
+func ValidateBody[T any](next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var payload T
 		var errors []string

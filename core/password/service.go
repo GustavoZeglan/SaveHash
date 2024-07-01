@@ -2,7 +2,6 @@ package password
 
 import (
 	"database/sql"
-	"fmt"
 )
 
 type UseCase interface {
@@ -18,12 +17,11 @@ func NewService(db *sql.DB) PasswordService {
 	return PasswordService{DB: db}
 }
 
-func (ps PasswordService) InsertPassword(password Password) (int, error) {
+func (ps PasswordService) InsertPassword(password *Password) (int, error) {
 	var id int
 
 	query, err := ps.DB.Prepare("INSERT INTO passwords(name, user_id, hash) VALUES ($1, $2, $3) RETURNING id;")
 	if err != nil {
-		fmt.Println(err)
 		return id, err
 	}
 
