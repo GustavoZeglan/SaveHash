@@ -1,8 +1,8 @@
 package user
 
 import (
-	"database/sql"
 	"errors"
+	"github.com/GustavoZeglan/SaveHash/core/user/domain"
 	"golang.org/x/crypto/bcrypt"
 
 	_ "github.com/lib/pq"
@@ -11,30 +11,22 @@ import (
 type UseCase interface {
 	Login(email, password string) (string, error)
 	SignUp(username, email, password string) error
-	GetAllUsers() ([]User, error)
-	GetUserByEmail(email string) (User, error)
+	GetUserByEmail(email string) (domain.ResponseUser, error)
 }
 
 type UserService struct {
-	DB *sql.DB
+	repo UserRepository
 }
 
-func NewService(DB *sql.DB) *UserService {
-	return &UserService{DB}
+func NewService(repo UserRepository) *UserService {
+	return &UserService{
+		repo: repo,
+	}
 }
 
 func (us *UserService) Login(email, password string) (bool, error) {
 
-	query, err := us.DB.Prepare("SELECT password FROM users WHERE email = $1")
-	if err != nil {
-		return false, err
-	}
-
-	defer query.Close()
-
-	var hashedPassword string
-
-	err = query.QueryRow(email).Scan(&hashedPassword)
+	hashedPassword, err := us.repo.FindPassword(email)
 	if err != nil {
 		return false, err
 	}
@@ -46,46 +38,36 @@ func (us *UserService) Login(email, password string) (bool, error) {
 	return true, nil
 }
 
-func (us *UserService) SignUp(username, email, password string) (*ResponseUser, error) {
+func (us *UserService) SignUp(username, email, password string) (*domain.ResponseUser, error) {
 
-	storageUser, err := us.GetUserByEmail(email)
+	storageUser, err := us.repo.FindByEmail(email)
 	if storageUser.Email == email {
 		return nil, errors.New("email already registered")
 	}
 
-	u, _ := NewUser(username, email, password)
-
-	query, err := us.DB.Prepare("INSERT INTO users(user_name, email, password) VALUES($1, $2, $3) RETURNING id;")
+	u, err := domain.NewUser(username, email, password)
 	if err != nil {
 		return nil, err
 	}
 
-	defer query.Close()
-
-	var id int
-	err = query.QueryRow(u.Username, u.Email, u.Password).Scan(&id)
+	id, err := us.repo.Save(u)
 	if err != nil {
 		return nil, err
 	}
 
-	ru := NewResponseUser(id, u.Username, u.Email)
+	ru := domain.NewResponseUser(id, u.Username, u.Email)
 
 	return ru, nil
 }
 
-func (us *UserService) GetUserByEmail(email string) (ResponseUser, error) {
-	var u ResponseUser
-	query, err := us.DB.Prepare("SELECT id, user_name, email FROM users WHERE email = $1")
+func (us *UserService) GetUserByEmail(email string) (*domain.ResponseUser, error) {
+
+	u, err := us.repo.FindByEmail(email)
 	if err != nil {
-		return ResponseUser{}, err
+		return nil, err
 	}
 
-	defer query.Close()
+	respUser := domain.NewResponseUser(u.ID, u.Username, u.Email)
 
-	err = query.QueryRow(email).Scan(&u.ID, &u.Username, &u.Email)
-	if err != nil {
-		return ResponseUser{}, err
-	}
-
-	return u, nil
+	return respUser, nil
 }

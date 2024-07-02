@@ -1,62 +1,53 @@
 package password
 
 import (
-	"database/sql"
+	"github.com/GustavoZeglan/SaveHash/core/password/domain"
+	"strconv"
 )
 
 type UseCase interface {
-	FindByUserId(userId string) (string, error)
-	InsertPassword(password Password) (int, error)
+	FindByUserId(userId string) ([]domain.Password, error)
+	InsertPassword(password *domain.PasswordRequest, userId string) (int, error)
 }
 
 type PasswordService struct {
-	DB *sql.DB
+	Repo PasswordRepository
 }
 
-func NewService(db *sql.DB) PasswordService {
-	return PasswordService{DB: db}
+func NewService(repo PasswordRepository) PasswordService {
+	return PasswordService{Repo: repo}
 }
 
-func (ps PasswordService) InsertPassword(password *Password) (int, error) {
-	var id int
-
-	query, err := ps.DB.Prepare("INSERT INTO passwords(name, user_id, hash) VALUES ($1, $2, $3) RETURNING id;")
+func (ps PasswordService) InsertPassword(password *domain.PasswordRequest, userId string) (int, error) {
+	uId, err := strconv.Atoi(userId)
 	if err != nil {
-		return id, err
+		return 0, err
 	}
 
-	defer query.Close()
+	p := &domain.Password{
+		Name:   password.Name,
+		Hash:   password.Hash,
+		UserID: uId,
+	}
 
-	err = query.QueryRow(password.Name, password.UserID, password.Hash).Scan(&id)
+	id, err := ps.Repo.Save(p)
 	if err != nil {
-		return id, err
+		return 0, err
 	}
 
 	return id, nil
 }
 
-func (ps *PasswordService) FindByUserId(userId string) ([]Password, error) {
-	query, err := ps.DB.Prepare("SELECT id, hash, name, user_id FROM passwords WHERE user_id = $1")
+func (ps *PasswordService) FindByUserId(userId string) ([]domain.Password, error) {
+
+	id, err := strconv.Atoi(userId)
 	if err != nil {
-		return []Password{}, nil
+		return nil, err
 	}
 
-	defer query.Close()
-
-	rows, err := query.Query(userId)
+	passwords, err := ps.Repo.FindByUserId(id)
 	if err != nil {
-		return []Password{}, nil
-	}
-
-	var passwords []Password
-
-	for rows.Next() {
-		password := Password{}
-		err = rows.Scan(&password.ID, &password.Hash, &password.Name, &password.UserID)
-		if err != nil {
-			return nil, err
-		}
-		passwords = append(passwords, password)
+		return nil, err
 	}
 
 	return passwords, nil

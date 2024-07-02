@@ -11,14 +11,17 @@ import (
 
 func initializeRoutes(r *chi.Mux, db *sql.DB) {
 
+	// Instance of user Repository
+	userRepo := user.NewUserRepository(db)
 	// Instance of User service
-	userService := user.NewService(db)
+	userService := user.NewService(userRepo)
 	// Instance of User Handler
 	userHandler := handler.NewUserHandler(userService)
 
+	// Instance of Password Repository
+	passwordRepo := password.NewPasswordRepository(db)
 	// Instance of Password Service
-	passwordService := password.NewService(db)
-
+	passwordService := password.NewService(passwordRepo)
 	// Instance of Password Handler
 	passwordHandler := handler.NewPasswordHandler(passwordService)
 
@@ -29,7 +32,6 @@ func initializeRoutes(r *chi.Mux, db *sql.DB) {
 
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.Auth)
-		r.Use(middleware.ValidateBody[password.Password])
 		r.Post("/password", passwordHandler.CreatePassword)
 		r.Get("/passwords", passwordHandler.GetPasswords)
 	})

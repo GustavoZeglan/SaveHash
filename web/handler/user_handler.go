@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"github.com/GustavoZeglan/SaveHash/core/user"
+	"github.com/GustavoZeglan/SaveHash/core/user/domain"
 	"github.com/GustavoZeglan/SaveHash/web/utils"
 	"net/http"
 	"strconv"
@@ -19,7 +20,7 @@ func NewUserHandler(service *user.UserService) *UserHandler {
 }
 
 func (uh *UserHandler) SignUp(w http.ResponseWriter, r *http.Request) {
-	var req user.SignUpRequest
+	var req domain.SignUpRequest
 
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
@@ -28,9 +29,9 @@ func (uh *UserHandler) SignUp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	u, err := user.NewUser(req.Username, req.Email, req.Password)
+	u, err := domain.NewUser(req.Username, req.Email, req.Password)
 	if err != nil {
-		msg := utils.Message{Message: "An unexpected error was occurred", Status: http.StatusBadRequest, Data: err.Error()}
+		msg := utils.Message{Message: "Invalid body request", Status: http.StatusBadRequest, Data: err.Error()}
 		utils.RespondWithJSON(w, http.StatusBadRequest, msg)
 		return
 	}
@@ -38,7 +39,7 @@ func (uh *UserHandler) SignUp(w http.ResponseWriter, r *http.Request) {
 	resUser, err := uh.service.SignUp(u.Username, u.Email, u.Password)
 
 	if err != nil && err.Error() == "email already registered" {
-		msg := utils.Message{Message: "Probally that email address is already in use", Status: http.StatusBadRequest}
+		msg := utils.Message{Message: "Email or password are invalid", Status: http.StatusBadRequest}
 		utils.RespondWithJSON(w, http.StatusBadRequest, msg)
 		return
 	}
@@ -53,7 +54,7 @@ func (uh *UserHandler) SignUp(w http.ResponseWriter, r *http.Request) {
 }
 
 func (uh *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
-	var req user.LoginRequest
+	var req domain.LoginRequest
 
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
@@ -62,9 +63,9 @@ func (uh *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	lr, err := user.NewLoginRequest(req.Email, req.Password)
+	loginReq, err := domain.NewLoginRequest(req.Email, req.Password)
 	if err != nil {
-		msg := utils.Message{Message: "Validation error", Status: http.StatusBadRequest, Data: err.Error()}
+		msg := utils.Message{Message: "Invalid body request", Status: http.StatusBadRequest, Data: err.Error()}
 		utils.RespondWithJSON(w, http.StatusBadRequest, msg)
 		return
 	}
@@ -76,22 +77,21 @@ func (uh *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	authenticated, err := uh.service.Login(lr.Email, lr.Password)
+	authenticated, err := uh.service.Login(loginReq.Email, loginReq.Password)
 	if err != nil || !authenticated {
 		msg := utils.Message{Message: "Invalid credentials", Status: http.StatusBadRequest}
 		utils.RespondWithJSON(w, http.StatusBadRequest, msg)
 		return
 	}
 
-	token, err := utils.CreateToken(strconv.Itoa(storageUser.ID), lr.Email)
+	token, err := utils.CreateToken(strconv.Itoa(storageUser.ID), loginReq.Email)
 	if err != nil {
 		msg := utils.Message{Message: "An unexpected error was occurred", Status: http.StatusInternalServerError}
 		utils.RespondWithJSON(w, http.StatusInternalServerError, msg)
 		return
 	}
 
-	resp := map[string]string{"token": token}
+	loginResp := domain.NewLoginResponse(token)
 
-	msg := utils.Message{Message: "Successfully logged in", Status: http.StatusAccepted, Data: resp}
-	utils.RespondWithJSON(w, http.StatusAccepted, msg)
+	utils.RespondWithJSON(w, http.StatusAccepted, loginResp)
 }

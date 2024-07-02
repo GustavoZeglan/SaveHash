@@ -2,12 +2,10 @@ package handler
 
 import (
 	"encoding/json"
-	"fmt"
 	"github.com/GustavoZeglan/SaveHash/core/password"
-	"github.com/GustavoZeglan/SaveHash/web/model"
+	"github.com/GustavoZeglan/SaveHash/core/password/domain"
 	"github.com/GustavoZeglan/SaveHash/web/utils"
 	"net/http"
-	"strconv"
 )
 
 type PasswordHandler struct {
@@ -19,8 +17,6 @@ func NewPasswordHandler(service password.PasswordService) *PasswordHandler {
 }
 
 func (ph *PasswordHandler) CreatePassword(w http.ResponseWriter, r *http.Request) {
-	p, _ := r.Context().Value("payload").(model.PasswordRequest)
-
 	payload := r.Header.Get("user_id")
 	if payload == "" {
 		w.Header().Set("Content-Type", "application/json")
@@ -29,35 +25,32 @@ func (ph *PasswordHandler) CreatePassword(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	userId, err := strconv.Atoi(payload)
+	var req domain.PasswordRequest
+
+	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("An unexpected error was occurred"))
+		utils.RespondWithJSON(w, http.StatusBadRequest, nil)
 		return
 	}
 
-	newPassword := password.NewPassword(p.Name, p.Hash, userId)
-
-	id, err := ph.service.InsertPassword(newPassword)
+	passwordRequest, err := domain.NewPasswordRequest(req.Name, req.Hash)
 	if err != nil {
-		fmt.Println(newPassword)
-		msg := utils.Message{Message: "An unexpected error was occurred", Status: http.StatusInternalServerError}
-		utils.RespondWithJSON(w, http.StatusInternalServerError, msg)
+		msg := utils.Message{Message: "Invalid body request", Status: http.StatusBadRequest, Data: err.Error()}
+		utils.RespondWithJSON(w, http.StatusBadRequest, msg)
 		return
 	}
 
-	newPassword.ID = uint64(id)
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	res, err := json.Marshal(newPassword)
+	id, err := ph.service.InsertPassword(passwordRequest, payload)
 	if err != nil {
 		msg := utils.Message{Message: "An unexpected error was occurred", Status: http.StatusInternalServerError}
 		utils.RespondWithJSON(w, http.StatusInternalServerError, msg)
 		return
 	}
-	w.Write(res)
+
+	passResp := domain.NewPasswordResponse(id, passwordRequest.Name, passwordRequest.Hash)
+
+	msg := utils.Message{Message: "Password successfully created", Status: http.StatusOK, Data: passResp}
+	utils.RespondWithJSON(w, http.StatusOK, msg)
 }
 
 func (ph *PasswordHandler) GetPasswords(w http.ResponseWriter, r *http.Request) {
