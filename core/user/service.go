@@ -3,22 +3,23 @@ package user
 import (
 	"errors"
 	"github.com/GustavoZeglan/SaveHash/core/user/domain"
+	"github.com/GustavoZeglan/SaveHash/core/user/repository"
 	"golang.org/x/crypto/bcrypt"
 
 	_ "github.com/lib/pq"
 )
 
 type UseCase interface {
-	Login(email, password string) (string, error)
-	SignUp(username, email, password string) error
-	GetUserByEmail(email string) (domain.ResponseUser, error)
+	Login(email, password string) (bool, error)
+	SignUp(username, email, password string) (domain.UserDomainInterface, error)
+	GetUserByEmail(email string) (domain.UserDomainInterface, error)
 }
 
 type UserService struct {
-	repo UserRepository
+	repo repository.UserRepository
 }
 
-func NewService(repo UserRepository) *UserService {
+func NewService(repo repository.UserRepository) *UserService {
 	return &UserService{
 		repo: repo,
 	}
@@ -38,36 +39,30 @@ func (us *UserService) Login(email, password string) (bool, error) {
 	return true, nil
 }
 
-func (us *UserService) SignUp(username, email, password string) (*domain.ResponseUser, error) {
+func (us *UserService) SignUp(username, email, password string) (domain.UserDomainInterface, error) {
 
 	storageUser, err := us.repo.FindByEmail(email)
-	if storageUser.Email == email {
+	if storageUser != nil && storageUser.GetEmail() == email {
 		return nil, errors.New("email already registered")
 	}
 
-	u, err := domain.NewUser(username, email, password)
+	ud := domain.NewUserDomain(0, username, email, password)
+	ud.EncryptPassword()
+
+	d, err := us.repo.Save(ud)
 	if err != nil {
 		return nil, err
 	}
 
-	id, err := us.repo.Save(u)
-	if err != nil {
-		return nil, err
-	}
-
-	ru := domain.NewResponseUser(id, u.Username, u.Email)
-
-	return ru, nil
+	return d, nil
 }
 
-func (us *UserService) GetUserByEmail(email string) (*domain.ResponseUser, error) {
+func (us *UserService) GetUserByEmail(email string) (domain.UserDomainInterface, error) {
 
-	u, err := us.repo.FindByEmail(email)
+	ud, err := us.repo.FindByEmail(email)
 	if err != nil {
 		return nil, err
 	}
 
-	respUser := domain.NewResponseUser(u.ID, u.Username, u.Email)
-
-	return respUser, nil
+	return ud, nil
 }

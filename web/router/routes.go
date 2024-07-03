@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"github.com/GustavoZeglan/SaveHash/core/password"
 	"github.com/GustavoZeglan/SaveHash/core/user"
+	"github.com/GustavoZeglan/SaveHash/core/user/repository"
 	"github.com/GustavoZeglan/SaveHash/web/handler"
 	"github.com/GustavoZeglan/SaveHash/web/middleware"
 	"github.com/go-chi/chi/v5"
@@ -12,7 +13,7 @@ import (
 func initializeRoutes(r *chi.Mux, db *sql.DB) {
 
 	// Instance of user Repository
-	userRepo := user.NewUserRepository(db)
+	userRepo := repository.NewUserRepository(db)
 	// Instance of User service
 	userService := user.NewService(userRepo)
 	// Instance of User Handler

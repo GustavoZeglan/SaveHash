@@ -1,13 +1,15 @@
-package user
+package repository
 
 import (
 	"database/sql"
 	"github.com/GustavoZeglan/SaveHash/core/user/domain"
+	"github.com/GustavoZeglan/SaveHash/core/user/entity"
+	"github.com/GustavoZeglan/SaveHash/core/user/repository/converter"
 )
 
 type UserRepository interface {
-	Save(user *domain.User) (int, error)
-	FindByEmail(email string) (domain.ResponseUser, error)
+	Save(user domain.UserDomainInterface) (domain.UserDomainInterface, error)
+	FindByEmail(email string) (domain.UserDomainInterface, error)
 	FindPassword(email string) (string, error)
 }
 
@@ -39,36 +41,37 @@ func (r *userRepository) FindPassword(email string) (string, error) {
 	return hashedPassword, nil
 }
 
-func (r *userRepository) Save(u *domain.User) (int, error) {
+func (r *userRepository) Save(di domain.UserDomainInterface) (domain.UserDomainInterface, error) {
 	query, err := r.DB.Prepare("INSERT INTO users(user_name, email, password) VALUES($1, $2, $3) RETURNING id;")
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
+
+	u := converter.ConvertDomainToEntity(di)
 
 	defer query.Close()
 
-	var id int
-	err = query.QueryRow(u.Username, u.Email, u.Password).Scan(&id)
+	err = query.QueryRow(u.Username, u.Email, u.Password).Scan(&u.ID)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 
-	return id, nil
+	return converter.ConvertEntityToDomain(u), nil
 }
 
-func (r *userRepository) FindByEmail(email string) (domain.ResponseUser, error) {
-	var u domain.ResponseUser
+func (r *userRepository) FindByEmail(email string) (domain.UserDomainInterface, error) {
+	u := &entity.UserEntity{}
 	query, err := r.DB.Prepare("SELECT id, user_name, email FROM users WHERE email = $1")
 	if err != nil {
-		return domain.ResponseUser{}, err
+		return nil, err
 	}
 
 	defer query.Close()
 
 	err = query.QueryRow(email).Scan(&u.ID, &u.Username, &u.Email)
 	if err != nil {
-		return domain.ResponseUser{}, err
+		return nil, err
 	}
 
-	return u, nil
+	return converter.ConvertEntityToDomain(u), nil
 }
